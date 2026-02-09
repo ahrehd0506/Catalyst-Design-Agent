@@ -1,3 +1,45 @@
+# --- OS / editor ---
+.DS_Store
+*~
+.vscode/
+.idea/
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+build/
+dist/
+*.egg-info/
+
+# --- Jupyter ---
+.ipynb_checkpoints/
+
+# --- Secrets / local configs ---
+config/config.local.yml
+.env
+
+# --- Outputs / logs / large artifacts ---
+output/
+outputs/
+data/outputs/
+wandb/
+logs/
+*.log
+
+# --- Large binary artifacts ---
+*.ckpt
+*.pt
+*.pth
+*.tiff
+*.h5
+*.lmdb
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
