@@ -1,0 +1,19 @@
+name: "gpt-4.1-mini_test/"
+save_path: "./outputs/"
+knowledge_path: "./data/modification_knowledge.txt"
+atoms_path: "./data/structures/fen4_hexa.POSCAR"
+
+target: 0.0
+strategy: "history"
+model_name: "gpt-4.1-mini"
+max_iteration: 10
+threshold: 0.1
+num_history: 3
+temperature: 1.0
+adsorbates: ["*O", "*OH", "*OOH"]
+reaction: "ORR"
+use_history_summary: True
+attempts: 3
+
+calculator_name: "UMA"
+

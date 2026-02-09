@@ -1,0 +1,5 @@
+METALS = ['Pt','Pd','Ir','Ru','Fe','Co','Mn','Cu','Ni','Cr','V','Ti','Mo','Na','Ta','Ag','Au','Zn','Sn','Bi']
+HETEROATOMS = ['N','S','P','B','C']
+COORDATOMS = ['N','S','O','C','H']
+LIGANDS = ['O','OH', 'None']
+FUNCTIONALGROUPS = ['COC','COH','CO']
