@@ -17,7 +17,7 @@ import time
 
 BASE_DIR = Path(__file__).resolve().parent
 os.environ["GEMINI_API_KEY"] = 'YOUR_API_KEY_HERE'
-os.environ["GEMINI_API_KEY"] = 'YOUR_API_KEY_HERE'
+os.environ["OPENAI_API_KEY"] = 'YOUR_API_KEY_HERE'
 
 def is_primitive(val):
     return isinstance(val, (str, int, float, bool)) or val is None
