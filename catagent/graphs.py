@@ -834,7 +834,7 @@ class SummaryNode(BaseNode[GraphState]):
         state.complexity_change = []
     
         state.iter_time = np.round(time.time() - state.current_time,4)
-        state.iter_time_list.append(float(state.iter_time))
+        state.iter_time_list.append(state.iter_time)
         state.current_time = time.time()
         
         
