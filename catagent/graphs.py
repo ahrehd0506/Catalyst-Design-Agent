@@ -18,6 +18,8 @@ import time
 
 @dataclass
 class GraphState:
+
+    # Tools and Agents
     calculator: Any
     modifier: Any
     formatter: Any
@@ -28,6 +30,7 @@ class GraphState:
     summarize_agent: Any
     report_agent: Any
     
+    # Run parameters 
     target:float
     max_iteration:int = 50
     threshold:float = 0.1
@@ -42,11 +45,13 @@ class GraphState:
     use_image:bool = True
     use_review:bool = False
     
+    # Search strategy parameters
     strategy:str = "exploration"
     current_strategy:str = "exploration"
     strategy_change:float = 0.5
     rag_store:Any = None
 
+    # Log 
     history_list: List[dict] = field(default_factory=list)
     prev_slabs_list: List[Any] = field(default_factory=list)
     slabs_list: List[Any] = field(default_factory=list)
@@ -54,6 +59,7 @@ class GraphState:
     rejected_list: List[Any] = field(default_factory=list)
     status_list: List[Any] = field(default_factory=list)
     
+    # Atom and property update
     current_atoms: Any = None
     prev_atoms: Any = None
     current_atoms_desc:str = ""
@@ -61,16 +67,19 @@ class GraphState:
     current_value:float = 0.0 
     prev_value:float = 0.0
     
+    # Complexity parameters
     current_rejection_count:int = 0
     complexity_change:List[int] = field(default_factory=list)
     max_complexity:int = 5
-
+    
+    # Design error and retry
     retry_flag:bool = False
     failed_modification_list: List[Any] = field(default_factory=list)
     retry_count:int = 0
     retry_reason:str = ""
     max_retry_count:int = 5
-
+    
+    # Inference time and token usage
     total_input_tokens: List[int] = field(default_factory=list)
     total_output_tokens: List[int] = field(default_factory=list)
     total_requests: List[int] = field(default_factory=list)
@@ -81,6 +90,7 @@ class GraphState:
     iter_time:float = 0.0
     iter_time_list:List[float] = field(default_factory=list)
     
+    # Responses and states update 
     last_proposal: Optional[DesignOutputs] = None
     last_modification: Optional[ModificationProposal] = None
     last_feedback: Optional[ReviewOutputs] = None
@@ -95,8 +105,12 @@ class GraphState:
             "best_modifier_status": {},
         }
     )
+    
+    # Memory update
     history_summary:str = "Initial State."
     simplified_history:str = "Initial State."
+    
+    # Input prompt save
     input_prompt_history: Dict[str, List[Any]] = field(
         default_factory=lambda: {
             "design_prompts": [],
@@ -105,7 +119,8 @@ class GraphState:
             "summary_prompts": [],
         }
     )
-
+    
+    # Temperature
     temperature: Dict[str, float] = field(
         default_factory=lambda: {
             "design": 1,
@@ -116,6 +131,7 @@ class GraphState:
         }
     )
     
+    # Control target based on given reaction
     @property
     def target_type(self) -> str:
         if len(self.adsorbates) > 1 and self.reaction:
@@ -127,22 +143,27 @@ class GraphState:
 class DesignNode(BaseNode[GraphState]): 
     async def run(self, ctx: GraphRunContext[GraphState]) -> 'ReviewNode | End':
         state = ctx.state
+        
+        # End if max iterations reached
         print(f"\n Iteration {state.current_iteration + 1} ")
         if state.current_iteration >= state.max_iteration:
             print("\n Max Iterations Reached.")
             return End(state)
         
+        # Exploration -> Exploitation at 50% progress
         if state.strategy == "exploration":
             if state.strategy_change*state.max_iteration < state.current_iteration:
                 state.current_strategy = "exploitation"
             else:
                 state.current_strategy = "exploration"
-                
+        
+        # Random modification sample for random strategy
         elif state.strategy == "random":
             print(f"[Designer] Suggest Random Modification...")
             valid = False
             loop_stack = 0
             
+            # Loop until a suitable modification is proposed
             while not valid:
                 loop_stack += 1
                 modification_type, params = state.modifier.get_random_modification(state.current_atoms)
@@ -172,6 +193,7 @@ class DesignNode(BaseNode[GraphState]):
         
         print(f"[Designer] Thinking...")
         
+        # Generate inputs for design agent  
         if state.strategy == "rag_base":
             inputs = DesignInputs(
                 current_atoms_desc=state.current_atoms_desc,
@@ -179,7 +201,7 @@ class DesignNode(BaseNode[GraphState]):
                 target_type=state.target_type,
                 review_feedback=state.last_feedback.feedback if state.last_feedback else None,
                 history_summary=state.history_summary,
-                vector_store=state.rag_store
+                vector_store=state.rag_store # Call RAG vector for RAG-based strategy
             )
           
         else:
@@ -191,7 +213,7 @@ class DesignNode(BaseNode[GraphState]):
                 history_summary=state.history_summary,
             )
           
-            
+        # Generate startegy prompt based on search strategy 
         if state.current_strategy == "exploration":
             if state.current_iteration > 0:
                 modification_list = [state.formatter.format_modification(history['modification']) for history in state.history_list[1:]]
@@ -228,7 +250,8 @@ class DesignNode(BaseNode[GraphState]):
         else:
             strat_prompt = ""
             
-            
+        
+        # Generate target prompt based on target property
         if "Gibbs" in state.target_type:
             target_prompt = textwrap.dedent(f"""
             Propose a modification to reach target {state.target} based on given information.
@@ -242,7 +265,8 @@ class DesignNode(BaseNode[GraphState]):
             Target Gibbs free energy of *OH: {1.23 - state.threshold} ~ {1.23 + state.threshold} eV
             Target Gibbs free energy of *OOH: {3.69 - state.threshold} ~ {3.69 + state.threshold} eV\
             """).strip()
-            
+        
+        # Generate feedback prompt about previous failure  
         if state.last_feedback and "reject" in state.last_feedback.decision:
             print(f"[Designer] Thinking again based on feedback...")
             state.last_feedback.decision = "choose_one"
@@ -253,9 +277,9 @@ class DesignNode(BaseNode[GraphState]):
             Please re-propose the modification based on the feedback and given information.
             NEVER suggest same modification with previous modification
             """).strip()
+            
         elif state.retry_flag:
             print(f"[Designer] Suggesting correct modification...")
-            
             state.retry_flag = False
             prev_modifications = state.formatter.format_proposal(state.failed_modification_list)
             feedback_prompt = textwrap.dedent(f"""
@@ -267,13 +291,14 @@ class DesignNode(BaseNode[GraphState]):
 
         else:
             feedback_prompt = ""
-
+        
+        # Generate image prompt if use image    
         if state.use_image:
             image_prompt = "Provided image is side and top view of current catalyst. Please consider geometrical effect too."
         elif state.use_image:
             image_prompt = ""
         
-        
+        # Generate main input prompt for desgin agent based on strategy 
         if state.strategy == "no_icl":
             design_prompt = textwrap.dedent(f"""
             {feedback_prompt}\
@@ -316,7 +341,8 @@ class DesignNode(BaseNode[GraphState]):
             The simplified history of previous modifications is {state.simplified_history} except recent {state.num_history}.
             """).strip()
         state.input_prompt_history['design_prompts'].append(design_prompt)
-          
+        
+        # If use image, encode image to pixel token   
         if state.use_image:
             image = make_figure(state.current_atoms)
             encoded_image = base64.b64encode(image).decode("utf-8")
@@ -324,12 +350,15 @@ class DesignNode(BaseNode[GraphState]):
                 design_prompt,
                 ImageUrl(url=f"data:image/png;base64,{encoded_image}"),
             ]
-            
+        
+        # Run design agent
         result = await state.design_agent.run(
             user_prompt=design_prompt,
             deps=inputs,
             model_settings=ModelSettings(temperature=state.temperature['design'])
         )
+        
+        # Add token usage
         if result.usage() is not None:
             u = result.usage()
             state.iter_input_tokens += u.input_tokens
@@ -337,6 +366,8 @@ class DesignNode(BaseNode[GraphState]):
             state.iter_requests += u.requests
         
         state.last_proposal = result.output
+        
+        # Validate the proposed modification 
         for modification in result.output.modifications:
             validity, reason, complexity_change = state.modifier.is_valid_modification(modification.modification_type, modification.parameters, state.current_atoms)
             if not validity:
@@ -366,9 +397,10 @@ class ReviewNode(BaseNode[GraphState]):
         state = ctx.state
         print(f"[Review] Reviewing proposal...")
 
-        # history check
+        # History check
         recent_history = state.history_list[-state.num_history:]
         
+        # If not use review agent, skip to calculate node
         if not state.use_review:
             state.last_feedback = ReviewOutputs(
                 decision='choose_one', selected_index=0, feedback="Skip review at this time" 
@@ -377,7 +409,8 @@ class ReviewNode(BaseNode[GraphState]):
             state.current_rejection_count = 0
             state.complexity_change = []
             return CalculationNode()
-            
+        
+        # Generate inputs for review agent  
         inputs = ReviewInputs(
             proposal=state.last_proposal,
             current_atoms_desc=state.current_atoms_desc,
@@ -386,6 +419,7 @@ class ReviewNode(BaseNode[GraphState]):
             recent_history=recent_history
         )
         
+        # Generate target prompt based on target property
         if "Gibbs" in state.target_type:
             target_prompt = textwrap.dedent(f"""
             The target Gibbs free energy (ΔG) value is {state.target}\
@@ -397,8 +431,11 @@ class ReviewNode(BaseNode[GraphState]):
             Target Gibbs free energy of *OH: {1.23 - state.threshold} ~ {1.23 + state.threshold} eV
             Target Gibbs free energy of *OOH: {3.69 - state.threshold} ~ {3.69 + state.threshold} eV\
             """).strip()
-
+        
+        # Generate history prompt 
         history_prompt = state.formatter.format_history_prompts(state.history_list, -state.num_history, None)
+        
+        # Generate main input prompt for review agent
         review_prompt = textwrap.dedent(f"""
         Review given proposal of design agent based on scientific principles and history.
         {target_prompt}
@@ -415,12 +452,14 @@ class ReviewNode(BaseNode[GraphState]):
         """).strip()
         state.input_prompt_history['review_prompts'].append(review_prompt)
         
+        # Run review agent
         result = await state.review_agent.run(
             user_prompt=review_prompt,
             deps=inputs,
             model_settings=ModelSettings(temperature=state.temperature['review'])
         )
         
+        # Add token usage
         if result.usage() is not None:
             u = result.usage()
             state.iter_input_tokens += u.input_tokens
@@ -429,6 +468,7 @@ class ReviewNode(BaseNode[GraphState]):
             
         state.last_feedback = result.output
         
+        # Choose one of suggested modifications if design agent suggests several
         if result.output.decision == 'choose_one':
             selected_idx = result.output.selected_index
             print(f"[Reviewer] Index {selected_idx} Approved.")
@@ -461,9 +501,11 @@ class CalculationNode(BaseNode[GraphState]):
             print(f"[Calculator] Applying suggested modification to {state.current_atoms_desc}")
             modified_atoms = state.modifier.apply(modification_type, parameters, state.current_atoms)
             
+            # Calculate dissolution potential and Gibbs free energies of atoms
             stability = state.calculator.calculate_dissolution_potential(modified_atoms)
             optimized_slabs, calc_results = state.calculator.calculate_binding_energy(modified_atoms, state.adsorbates)
-
+            
+            # Return to design node if one of calculations is not converged
             if (optimized_slabs == None) or (stability == None) :
                 print(f"[Calculator] Optimization failed... Return to Design Node")
                 state.retry_flag = True
@@ -472,19 +514,20 @@ class CalculationNode(BaseNode[GraphState]):
                 state.retry_reason = "Optimization Failed"
                 state.complexity_change = []
                 if state.retry_count > state.max_retry_count:
-                    print("[Calculator] Too many failed optimization, stopping.")
+                    print("[Calculator] Too many failed optimization, stopping.")  
                     return End(state)
                 return DesignNode()
             else:
                 state.retry_count = 0
                 state.failed_modification_list = []
             
-                
+            # Update calculated results
             state.prev_slabs_list.append(state.current_atoms)
             state.prev_value = state.current_value
             state.prev_atoms = state.current_atoms
             state.prev_atoms_desc = state.current_atoms_desc
             
+            # Update and log calculated atoms
             state.current_atoms = modified_atoms
             state.slabs_list.append(modified_atoms)
             state.adslabs_list.extend(calc_results['optimized_adslabs'])
@@ -492,7 +535,8 @@ class CalculationNode(BaseNode[GraphState]):
             # Get parameters
             center_idx, fnn_idx, _, _ = get_vnn_idx(modified_atoms)
             modification_status = state.modifier.status
-
+            
+            # Collect site component from modified atoms
             metal = modified_atoms[center_idx].symbol
             sites = calc_results['binding_sites']
             coordination = [modified_atoms[i].symbol for i in fnn_idx]
@@ -502,8 +546,8 @@ class CalculationNode(BaseNode[GraphState]):
             heteroatoms = f"{modification_status['2nd_shell']}"
             functional_group = f"{modification_status['functional_group']}"
             
-            # formatting
-            if "overpotential" in state.target_type:
+            # Calculate overpotential (if it is target) and format as description
+            if "overpotential" in state.target_type: 
                 value, rds = state.calculator.calculate_overpotential(calc_results, state.reaction)
                 catalyst_dict = {
                         'metal': metal, 'sites': sites, 'coordination': coordination, 'heteroatoms': heteroatoms, 'ligand': ligand, 'func_group': functional_group,
@@ -521,7 +565,8 @@ class CalculationNode(BaseNode[GraphState]):
             state.current_value = value
             current_atoms_desc = state.formatter.format_catalyst_string(target_type=state.target_type, **catalyst_dict)
             state.current_atoms_desc = current_atoms_desc
-
+            
+            # Update log if the best
             if state.best_state['best_value'] > np.abs(state.target - value):
                 state.best_state['best_atoms'] = state.current_atoms
                 state.best_state['best_atoms_desc'] = state.current_atoms_desc
@@ -534,6 +579,8 @@ class CalculationNode(BaseNode[GraphState]):
             
             print(f"[Calculator] Result: {current_atoms_desc} (Target: {state.target})")
             
+            # End run if target reached
+            # Not used in design run to find novel insight 
             '''
             if abs(value - state.target) <= state.threshold:
                 print("\n>>> TARGET REACHED! Stopping.")
@@ -562,6 +609,7 @@ class ReflectionNode(BaseNode[GraphState]):
     async def run(self, ctx: GraphRunContext[GraphState]) -> 'SummaryNode':
         state = ctx.state
         
+        # Skip reflect if strategy without history
         if state.strategy in ["no_icl","random"]:
             print("[Reflection] Skipping self-reflection...")
             history = {
@@ -577,7 +625,8 @@ class ReflectionNode(BaseNode[GraphState]):
         
         print(f"[Reflection] Analyzing result...")
         recent_history = state.history_list[-state.num_history:]
-            
+        
+        # Generate strategy prompt based on search strategy
         if state.strategy == "exploration":
             if state.current_strategy == "exploration":
                 strat_prompt = """
@@ -596,6 +645,7 @@ class ReflectionNode(BaseNode[GraphState]):
         else:
             strat_prompt = ""
             
+        # Generate target prompt based on target property
         if "Gibbs" in state.target_type:
             target_prompt = textwrap.dedent(f"""
             Please write a brief post-action reflection on the modification in less than five sentences, \
@@ -612,7 +662,8 @@ class ReflectionNode(BaseNode[GraphState]):
 
         history_prompt = state.formatter.format_history_prompts(state.history_list, -state.num_history, None)
         recent_catalysts_prompt = "\n".join([f"[{idx}] :: {catal[1]}" for idx, catal in enumerate(state.recent_catalysts)]) + " (recent)"
-
+        
+        # Generate image prompt if use image
         if state.use_image:
             image_prompt = textwrap.dedent(f"""
             Provided images are top and side view of optimized slabs and catalysts with adsorbates.\
@@ -621,6 +672,7 @@ class ReflectionNode(BaseNode[GraphState]):
         else:
             image_prompt = ""
             
+        # Generate main input prompt for reflect agent 
         reflect_prompt = textwrap.dedent(f"""
         {strat_prompt}\
         
@@ -646,7 +698,8 @@ class ReflectionNode(BaseNode[GraphState]):
         If all target value of recent catalysts is fall apart from the best, choose 'best'
         """).strip()
         state.input_prompt_history['reflection_prompts'].append(reflect_prompt)
-
+        
+        # If use image, encode slab and adslabs image to pixel tokens
         if state.use_image:
             reflect_prompt = [reflect_prompt] 
             slab_image = make_figure(state.slabs_list[-1])
@@ -659,20 +712,25 @@ class ReflectionNode(BaseNode[GraphState]):
                 encoded_image = base64.b64encode(adslab_image).decode("utf-8")
                 reflect_prompt.append(ImageUrl(url=f"data:image/png;base64,{encoded_image}"))
         
+        # Run reflect agent
         result = await state.reflect_agent.run(
             user_prompt=reflect_prompt,
             model_settings=ModelSettings(temperature=state.temperature['reflection'])
             )
+            
+        # Add token usage
         if result.usage() is not None:
             u = result.usage()
             state.iter_input_tokens += u.input_tokens
             state.iter_output_tokens += u.output_tokens
             state.iter_requests += u.requests
             
+        # Update atoms for next iteration
         state.last_reflection = result.output
         next_atoms_type = result.output.next_catalyst_type
         next_atoms_index = result.output.next_catalyst_index
-
+        
+        # Update modifier status if next atoms is not recent
         if next_atoms_type == 'recent':
             print(f"[Reflection] Index {next_atoms_index+1}/{len(state.recent_catalysts)} Selected")
             if next_atoms_index >= state.num_recent_catalysts:
@@ -720,6 +778,7 @@ class SummaryNode(BaseNode[GraphState]):
     async def run(self, ctx: GraphRunContext[GraphState]) -> 'DesignNode':
         state = ctx.state
         
+        # Reset iterable state and skip summarization if strategy without history 
         if state.strategy in ["no_icl","random"]:
             state.current_iteration += 1
             state.total_input_tokens.append(state.iter_input_tokens)
@@ -761,6 +820,7 @@ class SummaryNode(BaseNode[GraphState]):
                 
             return DesignNode()
             
+        # Run exploration report agent if reached to 50% of run    
         elif state.strategy == "exploration":
             if state.strategy_change*state.max_iteration == state.current_iteration:
                 print(f"[Report] Writing report...")
@@ -780,6 +840,7 @@ class SummaryNode(BaseNode[GraphState]):
         else:
             pass
           
+        # Summarize when short-term memory is full    
         if state.num_history >= state.current_iteration:
             pass
         else:
@@ -802,6 +863,7 @@ class SummaryNode(BaseNode[GraphState]):
                 """).strip()
                 state.input_prompt_history['summary_prompts'].append(summary_prompt)
                 
+                # Run history agent    
                 result = await state.summarize_agent.run(
                     user_prompt=summary_prompt,
                     model_settings=ModelSettings(temperature=state.temperature['summary'])
@@ -820,7 +882,7 @@ class SummaryNode(BaseNode[GraphState]):
         if state.name is None:
             state.name = datetime.now().strftime("%Y-%m-%d")
             
-            
+        # Reset iterable state
         state.current_iteration += 1
         state.total_input_tokens.append(state.iter_input_tokens)
         state.total_output_tokens.append(state.iter_output_tokens)

@@ -26,6 +26,9 @@ import textwrap
 import copy
 
 class ModificationTools:
+    """
+    Tools for modifying tructures and tracking status.
+    """
     def __init__(self):
         self.strategies = {
             'substitute_metal': self._metal_subs,
@@ -67,7 +70,18 @@ class ModificationTools:
         }
     
     def apply(self, modification_type:str, parameters:list, current_atoms):
-        ### Save modification history:
+        """
+        Applying modification to the current atoms
+    
+        Args:
+            modification_type: Key for the modification type
+            parameters: List of parameters required to modify
+            current_atoms: The current atomic structure object.
+    
+        Returns:
+            The modified atomic structure.
+        """
+
         self.stacked_strategies.append([modification_type, parameters])
             
         strategy_func = self.strategies.get(modification_type)
@@ -77,6 +91,17 @@ class ModificationTools:
         return strategy_func(parameters, current_atoms)
 
     def _metal_subs(self, parameters, current_atoms):
+        """
+        Substitute center metal  
+    
+        Args:
+            parameters: [current metal, new metal]
+            current_atoms: The current atomic structure.
+    
+        Returns:
+            The modified atomic structure.
+        """
+    
         current_metal, new_metal = parameters[0], parameters[1]
         modified_atoms = current_atoms.copy()
         self.status['metal'] = new_metal
@@ -87,12 +112,23 @@ class ModificationTools:
         return modified_atoms
 
     def _2nd_shell_subs(self, parameters, current_atoms):
+        """
+        Substitute second shell of carbon surpport  
+    
+        Args:
+            parameters: [current element, new element to substitute]
+            current_atoms: The current atomic structure.
+    
+        Returns:
+            The modified atomic structure.
+        """
+    
         current_element, new_element = parameters[0], parameters[1]
         modified_atoms = current_atoms.copy()
         tmp_catalyst =  current_atoms.copy()
         
-        _, _, snn_idx, _ = get_vnn_idx(self.coordination_recovery(tmp_catalyst))
-        doped_idx = [snn_idx[i] for i in [0,4,2,6,7,3,1,5]]
+        _, _, snn_idx, _ = get_vnn_idx(self.coordination_recovery(tmp_catalyst)) # To prevent voronoiNN miss second shell atom due to defected first shell, temporarly recover  
+        doped_idx = [snn_idx[i] for i in [0,4,2,6,7,3,1,5]] # After sorting index clockwise, substitute in this order for balanced substitution
         doped_elements = [modified_atoms[idx].symbol for idx in doped_idx]
 
         # If suggested element not in atoms, choose first element
@@ -117,12 +153,24 @@ class ModificationTools:
         return modified_atoms
 
     def _coord_subs(self, parameters, current_atoms):
+        """
+        Substitute first shell of carbon surpport  
+    
+        Args:
+            parameters: [current element, new element to substitute]
+            current_atoms: The current atomic structure.
+    
+        Returns:
+            The modified atomic structure.
+        """
+        
         current_element, new_element = parameters[0], parameters[1]
         modified_atoms = current_atoms.copy()
 
-        _, coord_idx, _, _ = get_vnn_idx(modified_atoms)
+        _, coord_idx, _, _ = get_vnn_idx(modified_atoms) # After sorting index clockwise, substitute in clockwise order
         coord_elements = [modified_atoms[idx].symbol for idx in coord_idx]
-
+        
+        # If suggested element not in atoms, choose first element
         if current_element not in coord_elements:
             current_element = coord_elements[0]
 
@@ -143,13 +191,25 @@ class ModificationTools:
         return modified_atoms
 
     def _coord_defect(self, parameters, current_atoms):
+        """
+        Remove a atom in first shell of carbon surpport  
+    
+        Args:
+            parameters: [current element to remove, placeholder]
+            current_atoms: The current atomic structure.
+    
+        Returns:
+            The modified atomic structure.
+        """
+    
         current_element = parameters[0]
         modified_atoms = current_atoms.copy()
         self.status['defect_count'] += 1
         
         _, coord_idx, _, _ = get_vnn_idx(modified_atoms)
-        coord_elements = [modified_atoms[idx].symbol for idx in coord_idx]
-
+        coord_elements = [modified_atoms[idx].symbol for idx in coord_idx] # After sorting index clockwise, remove in clockwise order
+        
+        # If suggested element not in atoms, choose first element
         if current_element not in coord_elements:
             current_element = coord_elements[0]
 
@@ -162,6 +222,16 @@ class ModificationTools:
         return modified_atoms
 
     def _coord_recov(self, parameters, current_atoms):
+        """
+        Add a atom in defect of first shell  
+    
+        Args:
+            parameters: [new element to add, placeholder]
+            current_atoms: The current atomic structure.
+    
+        Returns:
+            The modified atomic structure.
+        """
         new_element = parameters[0]
         modified_atoms = current_atoms.copy()        
         fnn_pos = self.initial_positions[1]
