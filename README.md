@@ -1,4 +1,4 @@
-# Catalyst-Design-Agent
+# MAESTRO: Mulit-Agent-based Electrocatalyst Search Through Reasoning and Optimization 
 
 ## Installation
 
@@ -32,4 +32,15 @@ Replace "YOUR_API_KEY_HERE" with your own API key, or set API keys via environme
 
 ```bash
 python agent.py
+```
+
+## Citation
+
+```
+@article{mok2026reasoning,
+  title={Reasoning-Driven Design of Single Atom Catalysts via a Multi-Agent Large Language Model Framework},
+  author={Mok, Dong Hyeon and Back, Seoin and Fung, Victor and Hu, Guoxiang},
+  journal={arXiv preprint arXiv:2602.21533},
+  year={2026}
+}
 ```
