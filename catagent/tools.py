@@ -69,7 +69,7 @@ class ModificationTools:
             'complexity' : 0,
         }
     
-    def apply(self, modification_type:str, parameters:list, current_atoms):
+    def apply(self, modification_type:str, parameters:list, current_atoms:Atoms):
         """
         Applying modification to the current atoms
     
@@ -90,7 +90,7 @@ class ModificationTools:
             raise ValueError(f"Unknown modification subtype: {modification_type}")
         return strategy_func(parameters, current_atoms)
 
-    def _metal_subs(self, parameters, current_atoms):
+    def _metal_subs(self, parameters:list, current_atoms:Atoms):
         """
         Substitute center metal  
     
@@ -111,7 +111,7 @@ class ModificationTools:
                 atom.symbol = new_metal
         return modified_atoms
 
-    def _2nd_shell_subs(self, parameters, current_atoms):
+    def _2nd_shell_subs(self, parameters:list, current_atoms:Atoms):
         """
         Substitute second shell of carbon surpport  
     
@@ -152,7 +152,7 @@ class ModificationTools:
         self.status['complexity'] += complexity
         return modified_atoms
 
-    def _coord_subs(self, parameters, current_atoms):
+    def _coord_subs(self, parameters:list, current_atoms:Atoms):
         """
         Substitute first shell of carbon surpport  
     
@@ -190,7 +190,7 @@ class ModificationTools:
         self.status['complexity'] += complexity
         return modified_atoms
 
-    def _coord_defect(self, parameters, current_atoms):
+    def _coord_defect(self, parameters:list, current_atoms:Atoms):
         """
         Remove a atom in first shell of carbon surpport  
     
@@ -221,7 +221,7 @@ class ModificationTools:
         self.status['complexity'] += 1
         return modified_atoms
 
-    def _coord_recov(self, parameters, current_atoms):
+    def _coord_recov(self, parameters:list, current_atoms:Atoms):
         """
         Add a atom in defect of first shell  
     
@@ -245,7 +245,17 @@ class ModificationTools:
         self.status['complexity'] -= 1
         return modified_atoms
 
-    def _modify_ligand(self, parameters, current_atoms):
+    def _modify_ligand(self, parameters:list, current_atoms:Atoms):
+        """
+        Add, remove or substitute axail ligand binding below the center atom  
+    
+        Args:
+            parameters: [new ligand, placeholder]
+            current_atoms: The current atomic structure.
+    
+        Returns:
+            The modified atomic structure.
+        """
         new_ligand = parameters[1]
         
         modified_atoms = current_atoms.copy()
@@ -285,7 +295,17 @@ class ModificationTools:
         self.status['complexity'] += complexity
         return modified_atoms           
         
-    def _add_func(self, parameters, current_atoms):
+    def _add_func(self, parameters:list, current_atoms:Atoms):
+        """
+        Add functional group on second shell shell of carbon surpport  
+    
+        Args:
+            parameters: [new functional group to add, placeholder]
+            current_atoms: The current atomic structure.
+    
+        Returns:
+            The modified atomic structure.
+        """
         new_func = parameters[0]
         modified_atoms = current_atoms.copy()
         snn_pos = self.initial_positions[2]
@@ -317,7 +337,17 @@ class ModificationTools:
         self.status['complexity'] += 1
         return modified_atoms
 
-    def _remove_func(self, parameters, current_atoms):
+    def _remove_func(self, parameters:list, current_atoms:Atoms):
+        """
+        Remove functional group from second shell shell of carbon surpport  
+    
+        Args:
+            parameters: [current functional group to remove, placeholder]
+            current_atoms: The current atomic structure.
+    
+        Returns:
+            The modified atomic structure.
+        """
         current_func = parameters[0]
         modified_atoms = current_atoms.copy()       
         snn_pos = self.initial_positions[2]
@@ -344,7 +374,17 @@ class ModificationTools:
         self.status['complexity'] -= 1
         return modified_atoms
 
-    def coordination_recovery(self, atoms):
+    def coordination_recovery(self, atoms:Atoms):
+        """
+        Recover defected atoms in first shell based on initial positions  
+        Used to get second shell atoms info when defect is existed in first shell
+        
+        Args:
+            atoms: atoms with defect
+    
+        Returns:
+            The recovered atomic structure.
+        """
         atoms = atoms.copy()
         if self.status['defect_count'] != 0:
             save_defect_count = self.status['defect_count']
@@ -357,7 +397,16 @@ class ModificationTools:
         else:
             return atoms
     
-    def get_random_modification(self, current_atoms):
+    def get_random_modification(self, current_atoms:Atoms):
+        """
+        Apply random modification to given atoms
+          
+        Args:
+            current_atoms: The current atomic structure.
+    
+        Returns:
+            The modified atomic structure.
+        """
         rng = random.Random(secrets.randbits(128))
         def _choice(items, exclude=None):
             if exclude is None:
@@ -412,7 +461,16 @@ class ModificationTools:
             
         return mod_type, params
             
-    def is_valid_modification(self, modification_type:str, parameters:list, current_atoms):
+    def is_valid_modification(self, modification_type:str, parameters:list, current_atoms:Atoms):
+        """
+        Check validity of modification applied to atoms  
+          
+        Args:
+            current_atoms: The current atomic structure.
+    
+        Returns:
+            The modified atomic structure.
+        """
         try:
             if modification_type not in self.strategies:
                 return False, "Suggested modification is not in list", 0
@@ -507,6 +565,9 @@ class ModificationTools:
             
             
 class CalculationTools:
+    """
+    Tools for calculating catalytic properties of single atom catalysts.
+    """
     def __init__(self, calculator_name:str = 'UMA'):
         self.calculator_name = calculator_name
 
@@ -540,7 +601,19 @@ class CalculationTools:
         else:
             pass
 
-    def _optimize_atoms(self, atoms, max_steps=200):
+    def _optimize_atoms(self, atoms:Atoms, max_steps:int =200):
+        """
+        Optimize atoms with given calculator
+        Criteria to decide force convergence is 0.05 eV/Angstrom
+          
+        Args:
+            atoms: The atomic structure to be optimized.
+            max_steps: Max optimizaiton steps. Stop optimization when reached max step.
+    
+        Returns:
+            atoms: The optimized atoms
+            energy: The caclulated DFT energy of the atoms 
+        """
         atoms = atoms.copy()
         atoms.set_calculator(FAIRChemCalculator(self.predictor, task_name="oc20"))
         opt = BFGS(atoms,logfile=None)
@@ -552,7 +625,17 @@ class CalculationTools:
             energy = None
         return atoms, energy
         
-    def _add_adsorbate(self, atoms, adsorbate):
+    def _add_adsorbate(self, atoms:Atoms, adsorbate:str):
+        """
+        Add given adsotbate on the center atom 
+          
+        Args:
+            atoms: The atomic structure.
+            adsorbate: The symbol of adsorbate to add. Available in [*O, *OH, *OOH].
+    
+        Returns:
+            atoms: The atoms with adsorbate 
+        """
         atoms = atoms.copy()
         center_pos, _, _, _ = get_vnn_positions(atoms)
         
@@ -568,7 +651,18 @@ class CalculationTools:
 
         return atoms
 
-    def calculate_metal_binidng_energy(self, atoms):
+    def calculate_metal_binidng_energy(self, atoms:Atoms):
+        """
+        Calculate binding energy of metal atom on carbon support
+        Calculated as following: 
+            Energy of Carbon support with metal - Energy of Carbon support without metal - Chemical potential of metal atom
+        
+        Args:
+            atoms: The atomic structure
+    
+        Returns:
+            Metal binding energy 
+        """
         slabs = atoms.copy()
         cavity = atoms.copy()
         
@@ -587,7 +681,18 @@ class CalculationTools:
             return None
         return np.round(slabs_e - cavity_e - mu,3)
 
-    def calculate_dissolution_potential(self, atoms):
+    def calculate_dissolution_potential(self, atoms:Atoms):
+        """
+        Calculate dissolution potential of metal atom on carbon support
+        Calculated as following: 
+            Standard reduction potential of metal - (Metal binding energy / Number of electron)
+        
+        Args:
+            atoms: The atomic structure
+    
+        Returns:
+            Dissolution potential
+        """
         slabs = atoms.copy()
 
         for atom in slabs:
@@ -603,7 +708,24 @@ class CalculationTools:
             return None
         return np.round(srp - (metal_bind_e/electron),3)
         
-    def calculate_binding_energy(self, atoms, adsorbates):
+    def calculate_binding_energy(self, atoms:Atoms, adsorbates:list):
+        """
+        Calculate binding energy of adsorbates on catalyst
+        Calculated as following: 
+            Adslab energy + Free energy correction - Slab energy - Gaseous atoms energy
+        
+        Args:
+            atoms: The atomic structure
+            adsorbates: List of adsorbate symbol, e.g. [*O, *OH]
+    
+        Returns:
+            optimized_slabs: The optimized slabs object
+            results: {
+                "optimized_adslabs": List of optimized adslabs object, 
+                "binding_sites": List of binding site of adsorbates,
+                "{adsorbate}_gibbs_free_bind_e}: Binding energy of adsorbate
+            }
+        """
         results = {'optimized_adslabs':[], 'binding_sites':[]}
         slabs = atoms.copy()
         
@@ -630,7 +752,18 @@ class CalculationTools:
 
         return optimized_slabs, results
         
-    def calculate_overpotential(self, results, reaction):
+    def calculate_overpotential(self, results:dict, reaction:str):
+        """
+        Calculate overpotential of atoms about given reaction from calculated adsorbate binding energies
+        
+        Args:
+            results: Binding energy calculated results from calculate_binding_energy() function
+            reaction: Reaction name. Currently available in ["ORR"] 
+    
+        Returns:
+            OP: Calculated overpotential
+            RDS: Rate-determining step
+        """
         if reaction == 'ORR':
             dG_OOH = results['*OOH_gibbs_free_bind_e']
             dG_OH = results['*OH_gibbs_free_bind_e']
@@ -650,9 +783,24 @@ class CalculationTools:
 
 
 class PromptingTools:
+    """
+    Tools for prompting catalyst description, response of the agents, and history
+    """
     def __init__(self):
         pass
-    def format_history_prompts(self, history_list:list, start, end):
+    def format_history_prompts(self, history_list:list, start:int, end:int):
+        """
+        Summarzing given history list to the prompt
+        Include previous and current catalyst, result and reasoning of the agnets
+        
+        Args:
+            history_list: List of history
+            start: Start index of history to be formatted
+            start: End index of history to be formatted
+    
+        Returns:
+            History prompt
+        """
         history_prompts = ""
         for idx, history in enumerate(history_list[start:end]):
             if history["iteration"] == 0:
@@ -670,6 +818,16 @@ class PromptingTools:
         return textwrap.dedent(history_prompts).strip()
 
     def format_simplified_history(self, history:dict):
+        """
+        Simplifying given history to the prompt
+        Not include reasoning of the agents
+        
+        Args:
+            history
+    
+        Returns:
+            Simplified history prompt
+        """
         catalyst = history['prev_catalyst'].split(', Gibbs')[0]+')'
         modification = self.format_modification(history['modification'])
         prev_energy = np.array([float(history['prev_catalyst'].split(f'of {ads}: ')[1].split(',')[0]) for ads in ['*OOH','*O','*OH']])
@@ -685,13 +843,32 @@ class PromptingTools:
             """)
         return prompt
         
-    def format_catalyst_string(self, target_type, **kwargs):
+    def format_catalyst_string(self, target_type:str, **kwargs):
+        """
+        Formatting catalyst description based on the target type 
+        
+        Args:
+            target_type: Target properties. Available in ["Gibbs free energy", "overpotential]
+            kwargs: arguments of _overpotential_format and _binding_energy_format functions
+                
+        Returns:
+            Catalyst description
+        """
         if "Gibbs free energy" in target_type:
             return self._binding_energy_format(**kwargs)
         elif "overpotential" in target_type:
             return self._overpotential_format(**kwargs)
 
-    def format_proposal(self, modifications):
+    def format_proposal(self, modifications:list):
+        """
+        Formatting list of modification from the design agent into one string line.
+        
+        Args:
+            modifications: List of modification
+                
+        Returns:
+            joined_modifications: Formatted modifications
+        """
         num_mod = len(modifications)
         if type(modifications[0]) == dict:
             joined_modifications = " and ".join([f"{modifications[k]['modification_type']}-{modifications[k]['parameters']}" for k in range(num_mod)])    
@@ -699,7 +876,16 @@ class PromptingTools:
             joined_modifications = " and ".join([f"{modifications[k].modification_type}-{modifications[k].parameters}" for k in range(num_mod)])
         return joined_modifications
 
-    def format_modification(self, modification):
+    def format_modification(self, modification:dict):
+        """
+        Formatting suggested modification from the design agent.
+        
+        Args:
+            modification
+                
+        Returns:
+            prompt: Formatted modification
+        """    
         if type(modification) != dict:
             modification = modification.model_dump()
 
